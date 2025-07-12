@@ -8,6 +8,14 @@
         "istream": "cpp",
         "functional": "cpp",
         "tuple": "cpp",
-        "utility": "cpp"
+        "utility": "cpp",
+        "deque": "cpp",
+        "string": "cpp",
+        "unordered_map": "cpp",
+        "vector": "cpp",
+        "string_view": "cpp",
+        "initializer_list": "cpp",
+        "pins_arduino.h": "c",
+        "wiring_private.h": "c"
     }
 }

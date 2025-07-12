@@ -4,7 +4,7 @@
             "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/**",
-                "C://Users//Martin//AppData//Local//Arduino15//packages//arduino//hardware//avr//**",
+                "C://Users//Martin//AppData//Local//Arduino15//packages//arduino//**",
                 "C://Users//Martin//AppData//Local//Arduino15//libraries//**",
                 "C:/Users/Martin/Documents/Arduino/libraries/**"
             ],

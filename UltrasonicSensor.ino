@@ -1,17 +1,26 @@
 #include <EEPROM.h>
 #include <RH_ASK.h>
+#include <avr/io.h>
+#include <avr/sleep.h>
+#include <avr/power.h>
 
 #include "Arduino.h"  // avr core
+
+#define INT_pin PD2  // change need to be updated in interrupt settings
+#define RF_pin  8
+
+#define RF_VCC_pin    4
+#define SONIC_VCC_pin 5
 
 #define TRIG_PIN 6
 #define ECHO_PIN 7
 
-#define AVG_COUNT         10
-#define TIME_BETWEEN_MEAS 500
+#define AVG_COUNT         2    // 10
+#define TIME_BETWEEN_MEAS 500  // 500
 // #define EEPROM
 
 // uint16_t speed = 2000, uint8_t rxPin = 11, uint8_t txPin = 12, uint8_t pttPin = 10, bool pttInverted = false
-RH_ASK rf_driver(500, 11, 12, 10, false);
+RH_ASK rf_driver(500, RF_pin, RF_pin, RF_pin, false);
 
 uint16_t measure() {
   digitalWrite(TRIG_PIN, LOW);
@@ -49,7 +58,7 @@ uint16_t data_colection() {
     // upload_data();
   }
 
-  duration_us = dur_sum / 10;
+  duration_us = dur_sum / AVG_COUNT;
 
   Serial.print("\nDuration avg: ");
   Serial.println(duration_us);
@@ -100,32 +109,87 @@ void upload_data() {
   }
 }
 
+void setup_pinchange_interrupt() {
+  // Set PD2 (INT0) as input
+  DDRD &= ~(1 << PD2);
+  PORTD |= (1 << PD2);  // Enable pull-up resistor if needed
+
+  // Configure INT0 to trigger on falling edge
+  EICRA |= (1 << ISC01);  // ISC01 = 1, ISC00 = 0 => falling edge
+  EICRA &= ~(1 << ISC00);
+
+  // Enable External Interrupt Request 0 (INT0)
+  EIMSK |= (1 << INT0);
+
+  // Clear any pending external interrupt flags
+  EIFR |= (1 << INTF0);
+}
+
+void go_to_sleep() {
+  // disable peripherals
+  digitalWrite(RF_VCC_pin, LOW);
+  digitalWrite(SONIC_VCC_pin, LOW);
+  digitalWrite(LED_BUILTIN, LOW);
+
+  set_sleep_mode(SLEEP_MODE_PWR_DOWN);  // Set Power-down mode
+  sleep_enable();                       // Enable sleep mode
+
+  // Ensure interrupts are enabled
+  sei();
+
+  sleep_cpu();  // Go to sleep
+
+  // Execution resumes here after wakeup
+  sleep_disable();  // Disable sleep to avoid accidental re-sleep
+
+  // enbale peripherals
+  digitalWrite(RF_VCC_pin, HIGH);
+  digitalWrite(SONIC_VCC_pin, HIGH);
+  digitalWrite(LED_BUILTIN, HIGH);
+}
+
+void setup_clock_prescaler() {
+  cli(); // Disable interrupts during change
+
+  CLKPR = (1 << CLKPCE); // Enable change of CLKPR
+  CLKPR = (1 << CLKPS1); // Set prescaler to divide by 16 (16MHz / 16 = 1MHz)
+
+  sei(); // Re-enable interrupts
+}
+
 void setup() {
+  //setup_clock_prescaler();
+  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(RF_VCC_pin, OUTPUT);
+  pinMode(SONIC_VCC_pin, OUTPUT);
   pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
+  pinMode(ECHO_PIN, INPUT);  
   Serial.begin(115200);
 
-  /*uint32_t c_time = millis();
-  while (c_time + 2000 > millis()) {
-    upload_data();
-  }*/
-
   rf_driver.init();
+
+  setup_pinchange_interrupt();
+
+  digitalWrite(RF_VCC_pin, HIGH);
+  digitalWrite(SONIC_VCC_pin, HIGH);
 
   // EEPROM.put(0, 2);  // store address 2 at adress 0
 }
 
 void loop() {
-  static uint32_t c_time = 0;
+  static uint8_t meas_count;
+  uint16_t duration_us = data_colection();
 
-  if (c_time + 1000 < millis()) {
-    uint16_t duration_us = data_colection();
-    send_packet(duration_us);
+  EEPROM.put(2 * meas_count, duration_us);
 
-    float distance = (duration_us * .0343) / 2;
-    Serial.print(" Distance avg: ");
-    Serial.println(distance, 1);
-
-    c_time = millis();
+  meas_count++;
+  if (meas_count >= 3) {
+    for (uint8_t i = 0; i < meas_count; i++) {
+      EEPROM.get(2 * i, duration_us);
+      send_packet(duration_us);
+    }
+    meas_count = 0;
   }
+
+  go_to_sleep();
 }
