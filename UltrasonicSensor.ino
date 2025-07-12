@@ -120,17 +120,17 @@ void loop() {
 
   static uint32_t c_time = 0;
   static uint16_t duration_us;
-  if (c_time + 1000 < millis()) {
+  //if (c_time + 1000 < millis()) {
     uint8_t msg[2];
     msg[0] = duration_us;
     msg[1] = duration_us >> 8;
     rf_driver.send(msg, 2);
     Serial.println("Sent");
     Serial.println(duration_us);
-    //rf_driver.waitPacketSent();
+    rf_driver.waitPacketSent();
     duration_us++;
     c_time = millis();
-  }
+  //}
   // delay(100);
   // rf_driver.mode() == rf_driver.RHModeTx;
 }

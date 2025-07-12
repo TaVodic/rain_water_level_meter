@@ -1,0 +1,2 @@
+arduino-cli compile -b arduino:avr:uno -v --library ./lib/** && arduino-cli upload -b arduino:avr:uno -p COM10 -v
+#arduino-cli compile -b arduino:avr:mini:cpu=atmega168 -v --output-dir ./build --library ./lib/** && C:/Users/Martin/AppData/Local/Arduino15/packages/arduino/tools/avrdude/6.3.0-arduino17/bin/avrdude -CC:/Users/Martin/AppData/Local/Arduino15/packages/arduino/tools/avrdude/6.3.0-arduino17/etc/avrdude.conf -v -V -patmega168p -cusbasp -Pusb -Uflash:w:C:/Users/Martin/Documents/Arduino/UltrasonicSensor/build/UltrasonicSensor.ino.hex:i

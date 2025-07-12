@@ -1,0 +1,3 @@
+[submodule "lib/RadioHead_MTedit"]
+	path = lib/RadioHead_MTedit
+	url = git@github.com:TaVodic/RadioHead_MTedit.git
