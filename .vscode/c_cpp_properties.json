@@ -4,12 +4,18 @@
             "name": "Win32",
             "includePath": [
                 "C://Users//Martin//AppData//Local//Arduino15//packages//arduino//hardware//avr//**",
-                "C://Users//Martin//AppData//Local//Arduino15//libraries//**"
+                "C://Users//Martin//AppData//Local//Arduino15//libraries//**",
+                "C:/Users/Martin/Documents/Arduino/libraries/**"
             ],
             "defines": [
                 "_DEBUG",
                 "UNICODE",
-                "_UNICODE"
+                "_UNICODE",
+                "F_CPU=16000000L",
+                "ARDUINO=10607",
+                "ARDUINO_AVR_MINI",
+                "ARDUINO_ARCH_AVR",
+                "__AVR__"
             ],
             "windowsSdkVersion": "10.0.19041.0",
             "cStandard": "c17",
