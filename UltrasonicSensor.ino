@@ -1,21 +1,21 @@
 #include <EEPROM.h>
 #include <RH_ASK.h>
 #include <avr/io.h>
-#include <avr/sleep.h>
 #include <avr/power.h>
+#include <avr/sleep.h>
 
 #include "Arduino.h"  // avr core
 
-#define INT_pin PD2  // change need to be updated in interrupt settings
-#define RF_pin  8
-
-#define RF_VCC_pin    4
+#define INT_pin       PD2  // change need to be updated in interrupt settings
+#define RF_VCC_pin    4    // unused
 #define SONIC_VCC_pin 5
+#define TRIG_PIN      6
+#define ECHO_PIN      7
+#define RF_pin        8
+#define SDA_PIN       18
+#define SCL_PIN       19
 
-#define TRIG_PIN 6
-#define ECHO_PIN 7
-
-#define AVG_COUNT         2    // 10
+#define AVG_COUNT         10    // 10
 #define TIME_BETWEEN_MEAS 500  // 500
 // #define EEPROM
 
@@ -149,22 +149,22 @@ void go_to_sleep() {
 }
 
 void setup_clock_prescaler() {
-  cli(); // Disable interrupts during change
+  cli();  // Disable interrupts during change
 
-  CLKPR = (1 << CLKPCE); // Enable change of CLKPR
-  CLKPR = (1 << CLKPS1); // Set prescaler to divide by 16 (16MHz / 16 = 1MHz)
+  CLKPR = (1 << CLKPCE);  // Enable change of CLKPR
+  CLKPR = (1 << CLKPS0);  // Set prescaler to divide by 2
 
-  sei(); // Re-enable interrupts
+  sei();  // Re-enable interrupts
 }
 
 void setup() {
-  //setup_clock_prescaler();
+  setup_clock_prescaler();
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(RF_VCC_pin, OUTPUT);
   pinMode(SONIC_VCC_pin, OUTPUT);
   pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);  
-  Serial.begin(115200);
+  pinMode(ECHO_PIN, INPUT);
+  Serial.begin(9600);
 
   rf_driver.init();
 
@@ -183,7 +183,7 @@ void loop() {
   EEPROM.put(2 * meas_count, duration_us);
 
   meas_count++;
-  if (meas_count >= 3) {
+  if (meas_count >= 1) {
     for (uint8_t i = 0; i < meas_count; i++) {
       EEPROM.get(2 * i, duration_us);
       send_packet(duration_us);
