@@ -3,6 +3,7 @@
 #include <avr/io.h>
 #include <avr/power.h>
 #include <avr/sleep.h>
+#include <avr/wdt.h>
 
 #include "Arduino.h"  // avr core
 
@@ -15,9 +16,16 @@
 #define SDA_PIN       18
 #define SCL_PIN       19
 
-#define AVG_COUNT         10    // 10
+// WDT wakes every 8 seconds. 450 * 8 = 3600 seconds = 1 hour.
+#define WDT_WAKE_COUNT 3
+
+#define AVG_COUNT         10   // 10
 #define TIME_BETWEEN_MEAS 500  // 500
 // #define EEPROM
+
+volatile uint16_t wdt_interrupt_count = 0;
+volatile uint8_t meas_flag = 0;
+volatile uint8_t wtd_status = 1;
 
 // uint16_t speed = 2000, uint8_t rxPin = 11, uint8_t txPin = 12, uint8_t pttPin = 10, bool pttInverted = false
 RH_ASK rf_driver(500, RF_pin, RF_pin, RF_pin, false);
@@ -135,8 +143,9 @@ void go_to_sleep() {
   sleep_enable();                       // Enable sleep mode
 
   // Ensure interrupts are enabled
-  sei();
+  // sei();
 
+  wdt_reset();  // reset the WDT timer
   sleep_cpu();  // Go to sleep
 
   // Execution resumes here after wakeup
@@ -146,6 +155,29 @@ void go_to_sleep() {
   digitalWrite(RF_VCC_pin, HIGH);
   digitalWrite(SONIC_VCC_pin, HIGH);
   digitalWrite(LED_BUILTIN, HIGH);
+}
+
+void setup_watchdog() {
+  cli();  // Disable interrupts
+
+  // Set up Watchdog Timer for interrupt every 8s
+  wdt_reset();
+
+  // WDTCSR setup
+  // Start timed sequence
+  WDTCSR |= (1 << WDCE) | (1 << WDE);
+
+  // Set to interrupt mode only, timeout = 8s
+  WDTCSR = (1 << WDIE) | (1 << WDP3) | (1 << WDP0);  // WDP3 + WDP0 = 8.0s // | (1 << WDP0)
+
+  sei();  // Enable interrupts
+}
+
+void perform_measurement() {
+  // Placeholder for actual measurement code
+  // e.g., read sensor, ADC, store result, etc.
+  // Example: toggle a pin to indicate measurement
+  PORTB ^= (1 << PB0);  // Toggle PB0 (digital pin 8)
 }
 
 void setup_clock_prescaler() {
@@ -158,7 +190,7 @@ void setup_clock_prescaler() {
 }
 
 void setup() {
-  setup_clock_prescaler();
+  //setup_clock_prescaler();
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(RF_VCC_pin, OUTPUT);
   pinMode(SONIC_VCC_pin, OUTPUT);
@@ -168,28 +200,50 @@ void setup() {
 
   rf_driver.init();
 
-  setup_pinchange_interrupt();
+  // setup_pinchange_interrupt();
+
+  setup_watchdog();
 
   digitalWrite(RF_VCC_pin, HIGH);
   digitalWrite(SONIC_VCC_pin, HIGH);
+  digitalWrite(LED_BUILTIN, HIGH);
 
   // EEPROM.put(0, 2);  // store address 2 at adress 0
 }
 
 void loop() {
-  static uint8_t meas_count;
-  uint16_t duration_us = data_colection();
-
-  EEPROM.put(2 * meas_count, duration_us);
-
-  meas_count++;
-  if (meas_count >= 1) {
-    for (uint8_t i = 0; i < meas_count; i++) {
-      EEPROM.get(2 * i, duration_us);
-      send_packet(duration_us);
-    }
-    meas_count = 0;
+  if (meas_flag) {
+    uint16_t duration_us = data_colection();
+    send_packet(duration_us);
+    meas_flag = 0;
   }
 
-  go_to_sleep();
+  go_to_sleep();  // MCU sleeps here and wakes via WDT interrupt
+  switch (wtd_status) {
+    case 1:
+      WDTCSR |= (1 << WDCE) | (1 << WDE);
+      WDTCSR = (1 << WDIE) | (1 << WDP3) | (1 << WDP0);  // 8s
+      delay(6000);
+      // wdt_interrupt_count++;
+      break;
+    case 2:
+      WDTCSR |= (1 << WDCE) | (1 << WDE);
+      WDTCSR = (1 << WDIE) | (1 << WDP3);  // 4s
+      wtd_status = 0;
+      break;
+    case 3:
+      WDTCSR |= (1 << WDCE) | (1 << WDE);
+      WDTCSR = (1 << WDIE) | (1 << WDP2) | (1 << WDP1) | (1 << WDP0);  // 2s
+      wtd_status = 0;
+      break;
+  }
+}
+
+ISR(WDT_vect) {
+  wtd_status++;
+
+  /*if (wdt_interrupt_count >= WDT_WAKE_COUNT) {
+    meas_flag = 1;
+    wdt_interrupt_count = 0;  // Reset for next hour
+  }*/
 }
