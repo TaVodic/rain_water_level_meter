@@ -173,13 +173,6 @@ void setup_watchdog() {
   sei();  // Enable interrupts
 }
 
-void perform_measurement() {
-  // Placeholder for actual measurement code
-  // e.g., read sensor, ADC, store result, etc.
-  // Example: toggle a pin to indicate measurement
-  PORTB ^= (1 << PB0);  // Toggle PB0 (digital pin 8)
-}
-
 void setup_clock_prescaler() {
   cli();  // Disable interrupts during change
 
@@ -190,7 +183,7 @@ void setup_clock_prescaler() {
 }
 
 void setup() {
-  //setup_clock_prescaler();
+  // setup_clock_prescaler();
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(RF_VCC_pin, OUTPUT);
   pinMode(SONIC_VCC_pin, OUTPUT);
@@ -202,7 +195,7 @@ void setup() {
 
   // setup_pinchange_interrupt();
 
-  setup_watchdog();
+  //setup_watchdog();
 
   digitalWrite(RF_VCC_pin, HIGH);
   digitalWrite(SONIC_VCC_pin, HIGH);
@@ -212,38 +205,8 @@ void setup() {
 }
 
 void loop() {
-  if (meas_flag) {
-    uint16_t duration_us = data_colection();
-    send_packet(duration_us);
-    meas_flag = 0;
-  }
-
-  go_to_sleep();  // MCU sleeps here and wakes via WDT interrupt
-  switch (wtd_status) {
-    case 1:
-      WDTCSR |= (1 << WDCE) | (1 << WDE);
-      WDTCSR = (1 << WDIE) | (1 << WDP3) | (1 << WDP0);  // 8s
-      delay(6000);
-      // wdt_interrupt_count++;
-      break;
-    case 2:
-      WDTCSR |= (1 << WDCE) | (1 << WDE);
-      WDTCSR = (1 << WDIE) | (1 << WDP3);  // 4s
-      wtd_status = 0;
-      break;
-    case 3:
-      WDTCSR |= (1 << WDCE) | (1 << WDE);
-      WDTCSR = (1 << WDIE) | (1 << WDP2) | (1 << WDP1) | (1 << WDP0);  // 2s
-      wtd_status = 0;
-      break;
-  }
-}
-
-ISR(WDT_vect) {
-  wtd_status++;
-
-  /*if (wdt_interrupt_count >= WDT_WAKE_COUNT) {
-    meas_flag = 1;
-    wdt_interrupt_count = 0;  // Reset for next hour
-  }*/
+  uint16_t duration_us = data_colection();
+  send_packet(duration_us);
+  
+  //go_to_sleep();  // MCU sleeps here and wakes via WDT interrupt
 }
