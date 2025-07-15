@@ -1,5 +1,7 @@
+#include <DS3231.h>
 #include <EEPROM.h>
 #include <RH_ASK.h>
+#include <Wire.h>
 #include <avr/io.h>
 #include <avr/power.h>
 #include <avr/sleep.h>
@@ -15,12 +17,15 @@
 #define SDA_PIN       18
 #define SCL_PIN       19
 
-#define AVG_COUNT         10    // 10
+#define AVG_COUNT         10   // 10
 #define TIME_BETWEEN_MEAS 500  // 500
 // #define EEPROM
 
 // uint16_t speed = 2000, uint8_t rxPin = 11, uint8_t txPin = 12, uint8_t pttPin = 10, bool pttInverted = false
 RH_ASK rf_driver(500, RF_pin, RF_pin, RF_pin, false);
+
+DS3231 rtc;  // Using I2C
+bool alarmTriggered = false;
 
 uint16_t measure() {
   digitalWrite(TRIG_PIN, LOW);
@@ -131,6 +136,8 @@ void go_to_sleep() {
   digitalWrite(SONIC_VCC_pin, LOW);
   digitalWrite(LED_BUILTIN, LOW);
 
+  Serial.flush();
+
   set_sleep_mode(SLEEP_MODE_PWR_DOWN);  // Set Power-down mode
   sleep_enable();                       // Enable sleep mode
 
@@ -157,21 +164,100 @@ void setup_clock_prescaler() {
   sei();  // Re-enable interrupts
 }
 
+void setNextAlarm() {
+  bool h12;
+  bool hPM;
+  uint8_t cMin = rtc.getMinute();
+  // uint8_t next_min = (cMin + 4) / 5 * 5;
+  uint8_t next_min = cMin + 1;
+
+  uint8_t cHour = rtc.getHour(h12, hPM);
+
+  // Set Alarm 1 to match hour, minute, second = 0:00
+  rtc.setA1Time(
+      rtc.getDate(),  // day
+      cHour,
+      next_min > 60 ? 60 : next_min,
+      0,
+      0b00001110,  // Match HH:MM:SS (when sec, min, and hour match)
+      false, false, false);
+
+  // enable Alarm 1 interrupts
+  rtc.turnOnAlarm(1);
+  // clear Alarm 1 flag
+  rtc.checkIfAlarm(1);
+
+  getCurrentTime();
+  Serial.print("Next alarm set at: ");
+  Serial.print(cHour);
+  Serial.print(":");
+  Serial.print(next_min);
+  Serial.println(":00");
+}
+
+void setCurrentTime() {
+  rtc.setYear(25);
+  rtc.setMonth(07);
+  rtc.setDate(15);
+  rtc.setDoW(2);
+  rtc.setHour(19);
+  rtc.setMinute(10);
+  rtc.setSecond(0);
+}
+
+void getCurrentTime() {
+  bool h12Flag;
+  bool pmFlag;
+  bool century;
+
+  Serial.print("\nCurrent time: 20");
+  Serial.print(rtc.getYear());
+  Serial.print(" ");
+
+  // then the month
+  Serial.print(rtc.getMonth(century));
+  Serial.print(" ");
+
+  // then the date
+  Serial.print(rtc.getDate());
+  Serial.print(" ");
+
+  // Finally the hour, minute, and second
+  Serial.print(rtc.getHour(h12Flag, pmFlag));
+  Serial.print(":");
+  Serial.print(rtc.getMinute());
+  Serial.print(":");
+  Serial.print(rtc.getSecond());
+  Serial.print("\n");
+}
+
 void setup() {
   setup_clock_prescaler();
+
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(RF_VCC_pin, OUTPUT);
   pinMode(SONIC_VCC_pin, OUTPUT);
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
-  Serial.begin(9600);
 
+  Serial.begin(9600);
+  Serial.println("\n---Rain water level meter---");
+  Wire.begin();
   rf_driver.init();
+
+  rtc.setClockMode(false);  // 24h mode
+
+  // setCurrentTime();
+
+  rtc.setA2Time(0, 0, 0xFF, 0b01100000, false, false, false);  // Upload the parameters to prevent Alarm 2 entirely
+  rtc.turnOffAlarm(2);                                         // disable Alarm 2 interrupt
+  rtc.checkIfAlarm(2);                                         // clear Alarm 2 flag
 
   setup_pinchange_interrupt();
 
   digitalWrite(RF_VCC_pin, HIGH);
   digitalWrite(SONIC_VCC_pin, HIGH);
+  digitalWrite(LED_BUILTIN, HIGH);
 
   // EEPROM.put(0, 2);  // store address 2 at adress 0
 }
@@ -180,6 +266,8 @@ void loop() {
   static uint8_t meas_count;
   uint16_t duration_us = data_colection();
   send_packet(duration_us);
+
+  setNextAlarm();  // Schedule next 4-hour alarm
 
   /*EEPROM.put(2 * meas_count, duration_us);
 
