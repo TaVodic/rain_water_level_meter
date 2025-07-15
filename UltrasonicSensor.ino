@@ -179,8 +179,9 @@ void setup() {
 void loop() {
   static uint8_t meas_count;
   uint16_t duration_us = data_colection();
+  send_packet(duration_us);
 
-  EEPROM.put(2 * meas_count, duration_us);
+  /*EEPROM.put(2 * meas_count, duration_us);
 
   meas_count++;
   if (meas_count >= 1) {
@@ -189,7 +190,7 @@ void loop() {
       send_packet(duration_us);
     }
     meas_count = 0;
-  }
+  }*/
 
   go_to_sleep();
 }
