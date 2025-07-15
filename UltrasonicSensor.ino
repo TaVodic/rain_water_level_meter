@@ -1,5 +1,7 @@
+#include <DS3231.h>
 #include <EEPROM.h>
 #include <RH_ASK.h>
+#include <Wire.h>
 #include <avr/io.h>
 #include <avr/power.h>
 #include <avr/sleep.h>
@@ -15,12 +17,15 @@
 #define SDA_PIN       18
 #define SCL_PIN       19
 
-#define AVG_COUNT         10    // 10
+#define AVG_COUNT         10   // 10
 #define TIME_BETWEEN_MEAS 500  // 500
 // #define EEPROM
 
 // uint16_t speed = 2000, uint8_t rxPin = 11, uint8_t txPin = 12, uint8_t pttPin = 10, bool pttInverted = false
 RH_ASK rf_driver(500, RF_pin, RF_pin, RF_pin, false);
+
+DS3231 rtc;  // Using I2C
+bool alarmTriggered = false;
 
 uint16_t measure() {
   digitalWrite(TRIG_PIN, LOW);
@@ -157,16 +162,54 @@ void setup_clock_prescaler() {
   sei();  // Re-enable interrupts
 }
 
+void setNextAlarm() {
+  uint8_t hour = rtc.getHour();
+  uint8_t nextHour;
+
+  uint8_t cHour = rtc.getHour();
+  if (cHour >= 6 && cHour < 14){
+    nextHour = 14;
+  } else if(cHour >= 14 && cHour < 22){
+    nextHour = 22;
+  } else {
+    nextHour = 6;
+  }
+
+  // Set Alarm 1 to match hour, minute, second = 0:00
+  rtc.setA1Time(
+      rtc.getDate(),   // day
+      nextHour, 0, 0,  // hour:min:sec
+      0b00001110       // Match HH:MM:SS (when sec, min, and hour match)
+  );
+
+  Serial.print("Next alarm set at: ");
+  Serial.print(nextHour);
+  Serial.println(":00:00");
+}
+
 void setup() {
   setup_clock_prescaler();
+
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(RF_VCC_pin, OUTPUT);
   pinMode(SONIC_VCC_pin, OUTPUT);
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
-  Serial.begin(9600);
 
+  Serial.begin(9600);
+  Wire.begin();
   rf_driver.init();
+  rtc.begin();
+
+  // Disable square wave output, enable alarm interrupt
+  rtc.writeControlByte(0x04);  // INTCN = 1, A2IE = 0, A1IE = 1
+  rtc.setClockMode(false);  // 24h mode
+
+  // Clear any existing alarm flags
+  rtc.clearA1Flag();
+
+  // Set first alarm
+  setNextAlarm();
 
   setup_pinchange_interrupt();
 
@@ -180,6 +223,9 @@ void loop() {
   static uint8_t meas_count;
   uint16_t duration_us = data_colection();
   send_packet(duration_us);
+
+  rtc.clearA1Flag();  // Clear alarm flag
+  setNextAlarm();     // Schedule next 4-hour alarm
 
   /*EEPROM.put(2 * meas_count, duration_us);
 
