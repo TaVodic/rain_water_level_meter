@@ -49,11 +49,11 @@ uint16_t data_colection() {
 
   Serial.print("Duration ms sample: ");
   for (uint8_t i = 0; i < AVG_COUNT; i++) {    
+    delay(TIME_BETWEEN_MEAS);  // TODO: go to sleep between measurements
     duration_us = measure();
     Serial.print(duration_us);
     Serial.print(" ");
     dur_sum = dur_sum + duration_us;
-    delay(TIME_BETWEEN_MEAS);  // TODO: go to sleep between measurements
   }
 
   duration_us = dur_sum / AVG_COUNT;
@@ -115,7 +115,7 @@ void setup_pinchange_interrupt() {
 void go_to_sleep() {
   // disable peripherals
   digitalWrite(RF_VCC_pin, LOW);
-  //digitalWrite(SONIC_VCC_pin, LOW);
+  digitalWrite(SONIC_VCC_pin, LOW);
   digitalWrite(LED_BUILTIN, LOW);
 
   Serial.flush();
@@ -133,7 +133,7 @@ void go_to_sleep() {
 
   // enbale peripherals
   digitalWrite(RF_VCC_pin, HIGH);
-  //digitalWrite(SONIC_VCC_pin, HIGH);
+  digitalWrite(SONIC_VCC_pin, HIGH);
   digitalWrite(LED_BUILTIN, HIGH);
 }
 
@@ -165,7 +165,7 @@ void setNextAlarm() {
       cHour,
       /*next_min > 60 ? 60 : next_min,*/
       cMin,
-      next_sec > 60 ? 60 : next_sec,
+      next_sec > 59 ? 59 : next_sec,
       0b00001110,  // Match HH:MM:SS (when sec, min, and hour match)
       false, false, false);
 
