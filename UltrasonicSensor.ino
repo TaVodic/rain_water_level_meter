@@ -55,11 +55,11 @@ uint16_t data_colection() {
 
   Serial.print("Duration ms sample: ");
   for (uint8_t i = 0; i < AVG_COUNT; i++) {
+    delay(TIME_BETWEEN_MEAS);  // TODO: go to sleep between measurements
     duration_us = measure();
     Serial.print(duration_us);
     Serial.print(" ");
     dur_sum = dur_sum + duration_us;
-    delay(TIME_BETWEEN_MEAS);  // TODO: go to sleep between measurements
     // upload_data();
   }
 
@@ -67,6 +67,10 @@ uint16_t data_colection() {
 
   Serial.print("\nDuration avg: ");
   Serial.println(duration_us);
+
+  float distance = (duration_us * .0343) / 2;
+  Serial.print("Distance avg: ");
+  Serial.println(distance, 1);
 
 #ifdef EEPROM
   Serial.print("Writing on address: ");
@@ -198,11 +202,11 @@ void setNextAlarm() {
 void setCurrentTime() {
   rtc.setYear(25);
   rtc.setMonth(07);
-  rtc.setDate(15);
-  rtc.setDoW(2);
-  rtc.setHour(19);
-  rtc.setMinute(10);
-  rtc.setSecond(0);
+  rtc.setDate(16);
+  rtc.setDoW(3);
+  rtc.setHour(11);
+  rtc.setMinute(35);
+  rtc.setSecond(30);
 }
 
 void getCurrentTime() {
