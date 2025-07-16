@@ -12,8 +12,8 @@
 #define RF_VCC_pin    4    // unused
 #define SONIC_VCC_pin 5
 #define TRIG_PIN      6
-#define ECHO_PIN      7
-#define RF_pin        8
+#define ECHO_PIN      8
+#define RF_pin        7
 #define SDA_PIN       18
 #define SCL_PIN       19
 
@@ -26,41 +26,34 @@ RH_ASK rf_driver(500, RF_pin, RF_pin, RF_pin, false);
 
 DS3231 rtc;  // Using I2C
 bool alarmTriggered = false;
+volatile uint16_t start_time = 0;
+volatile uint16_t echo_duration = 0;
+volatile uint8_t capture_done = 0;
+volatile uint8_t state = 0;
 
 uint16_t measure() {
+  TCNT1 = 0;  // Reset timer (optional, but safe)
+  capture_done = 0;
   digitalWrite(TRIG_PIN, LOW);
   delayMicroseconds(2);
   digitalWrite(TRIG_PIN, HIGH);
   delayMicroseconds(10);
   digitalWrite(TRIG_PIN, LOW);
-  return (uint16_t)pulseIn(ECHO_PIN, HIGH);
+  while (capture_done == 0);     // Wait for echo
+  return echo_duration * 2;  // prescaler 8 means 0.5us resolution
 }
 
 uint16_t data_colection() {
-#ifdef EEPROM
-  static uint16_t addr;
-  static uint8_t firstRun = true;
-  if (firstRun) {
-    EEPROM.get(0, addr);  // Read 2 bytes into addr
-    firstRun = false;
-  }
-  if (addr >= EEPROM.length()) {
-    Serial.println("EEPROM full!");
-    return;
-  }
-#endif
-
   uint16_t duration_us;
   uint32_t dur_sum = 0;
 
   Serial.print("Duration ms sample: ");
-  for (uint8_t i = 0; i < AVG_COUNT; i++) {
-    delay(TIME_BETWEEN_MEAS);  // TODO: go to sleep between measurements
+  for (uint8_t i = 0; i < AVG_COUNT; i++) {    
     duration_us = measure();
     Serial.print(duration_us);
     Serial.print(" ");
     dur_sum = dur_sum + duration_us;
-    // upload_data();
+    delay(TIME_BETWEEN_MEAS);  // TODO: go to sleep between measurements
   }
 
   duration_us = dur_sum / AVG_COUNT;
@@ -68,17 +61,19 @@ uint16_t data_colection() {
   Serial.print("\nDuration avg: ");
   Serial.println(duration_us);
 
-  float distance = (duration_us * .0343) / 2;
-  Serial.print("Distance avg: ");
-  Serial.println(distance, 1);
+  float tempC = rtc.getTemperature();
 
-#ifdef EEPROM
-  Serial.print("Writing on address: ");
-  Serial.println(addr);
-  EEPROM.put(addr, duration_us);
-  addr = addr + sizeof(duration_us);
-  EEPROM.put(0, addr);
-#endif
+  Serial.print("T=");
+	Serial.print(tempC, 2);
+
+  float c = 331.3 + 0.606 * tempC; 
+
+  Serial.print("c=");
+	Serial.print(c, 2);
+
+  float distance = (duration_us * c / 10000) / 2;
+  Serial.print(" Distance avg: ");
+  Serial.println(distance, 1);
 
   return duration_us;
 }
@@ -92,30 +87,13 @@ void send_packet(uint16_t duration_us) {
   // rf_driver.mode() == rf_driver.RHModeTx;
 }
 
-void upload_data() {
-  while (Serial.available()) {
-    char inChar = (char)Serial.read();
-    if (inChar == '\n') {
-      for (uint16_t i = 0; i < 1024; i = i + 2) {
-        uint16_t data = 0;
-        EEPROM.get(i, data);
-        Serial.println(data);
-      }
-      Serial.println("Upload completed!\n");
-      while (1) {
-      };
-    }
-    if (inChar == '.') {
-      for (uint16_t i = 2; i < EEPROM.length(); i++) {
-        uint8_t data = 0;
-        EEPROM.put(i, data);
-      }
-      EEPROM.put(0, (uint16_t)2);
-      Serial.println("Erase completed!");
-      while (1) {
-      };
-    }
-  }
+void init_ultrasonic_icp1() {
+  // Configure Timer1
+  TCCR1A = 0;                           // set to normal mode
+  TCCR1B = (1 << ICES1) | (1 << CS11);  // Rising edge, prescaler = 8 (1 µs resolution)
+  TIMSK1 |= (1 << ICIE1);               // Enable input capture interrupt
+
+  sei();  // Enable global interrupts
 }
 
 void setup_pinchange_interrupt() {
@@ -137,7 +115,7 @@ void setup_pinchange_interrupt() {
 void go_to_sleep() {
   // disable peripherals
   digitalWrite(RF_VCC_pin, LOW);
-  digitalWrite(SONIC_VCC_pin, LOW);
+  //digitalWrite(SONIC_VCC_pin, LOW);
   digitalWrite(LED_BUILTIN, LOW);
 
   Serial.flush();
@@ -155,7 +133,7 @@ void go_to_sleep() {
 
   // enbale peripherals
   digitalWrite(RF_VCC_pin, HIGH);
-  digitalWrite(SONIC_VCC_pin, HIGH);
+  //digitalWrite(SONIC_VCC_pin, HIGH);
   digitalWrite(LED_BUILTIN, HIGH);
 }
 
@@ -171,18 +149,23 @@ void setup_clock_prescaler() {
 void setNextAlarm() {
   bool h12;
   bool hPM;
-  uint8_t cMin = rtc.getMinute();
+  //uint8_t cMin = rtc.getMinute();
   // uint8_t next_min = (cMin + 4) / 5 * 5;
-  uint8_t next_min = cMin + 1;
+  //uint8_t next_min = cMin + 1;
+
+  uint8_t cSec = rtc.getSecond();
+  uint8_t next_sec = (cSec + 9) / 10 * 10;
 
   uint8_t cHour = rtc.getHour(h12, hPM);
+  uint8_t cMin = rtc.getMinute();
 
   // Set Alarm 1 to match hour, minute, second = 0:00
   rtc.setA1Time(
       rtc.getDate(),  // day
       cHour,
-      next_min > 60 ? 60 : next_min,
-      0,
+      /*next_min > 60 ? 60 : next_min,*/
+      cMin,
+      next_sec > 60 ? 60 : next_sec,
       0b00001110,  // Match HH:MM:SS (when sec, min, and hour match)
       false, false, false);
 
@@ -195,8 +178,10 @@ void setNextAlarm() {
   Serial.print("Next alarm set at: ");
   Serial.print(cHour);
   Serial.print(":");
-  Serial.print(next_min);
-  Serial.println(":00");
+  Serial.print(cMin);
+  Serial.print(":");
+  Serial.print(next_sec);
+  Serial.println("");
 }
 
 void setCurrentTime() {
@@ -258,18 +243,17 @@ void setup() {
   rtc.checkIfAlarm(2);                                         // clear Alarm 2 flag
 
   setup_pinchange_interrupt();
+  init_ultrasonic_icp1();
 
   digitalWrite(RF_VCC_pin, HIGH);
   digitalWrite(SONIC_VCC_pin, HIGH);
   digitalWrite(LED_BUILTIN, HIGH);
-
-  // EEPROM.put(0, 2);  // store address 2 at adress 0
 }
 
 void loop() {
   static uint8_t meas_count;
   uint16_t duration_us = data_colection();
-  send_packet(duration_us);
+  //send_packet(duration_us);
 
   setNextAlarm();  // Schedule next 4-hour alarm
 
@@ -285,4 +269,21 @@ void loop() {
   }*/
 
   go_to_sleep();
+}
+
+ISR(TIMER1_CAPT_vect) {
+  
+
+  if (state == 0) {
+    // Rising edge detected
+    start_time = ICR1;
+    TCCR1B &= ~(1 << ICES1);  // Switch to falling edge
+    state = 1;
+  } else {
+    // Falling edge detected
+    echo_duration = ICR1 - start_time;
+    TCCR1B |= (1 << ICES1);  // Switch back to rising edge
+    capture_done = 1;
+    state = 0;
+  }
 }
