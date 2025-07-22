@@ -75,7 +75,9 @@ uint16_t data_colection() {
   Serial.print(" Distance avg: ");
   Serial.println(distance, 1);
 
-  return duration_us;
+  uint16_t dist_coded_cm = (uint16_t)distance*10;
+
+  return dist_coded_cm;
 }
 
 void send_packet(uint16_t duration_us) {
@@ -252,8 +254,8 @@ void setup() {
 
 void loop() {
   static uint8_t meas_count;
-  uint16_t duration_us = data_colection();
-  //send_packet(duration_us);
+  uint16_t dist_coded_cm = data_colection();
+  send_packet(dist_coded_cm);
 
   setNextAlarm();  // Schedule next 4-hour alarm
 
