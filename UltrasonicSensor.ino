@@ -17,7 +17,7 @@
 #define SDA_PIN       18
 #define SCL_PIN       19
 
-#define AVG_COUNT         10   // 10
+#define AVG_COUNT         9    // 10
 #define TIME_BETWEEN_MEAS 500  // 500
 #define RC_OSC_CONST      0.9765
 // #define EEPROM
@@ -49,12 +49,15 @@ uint16_t data_colection() {
   uint32_t dur_sum = 0;
 
   Serial.print("Duration ms sample: ");
-  for (uint8_t i = 0; i < AVG_COUNT; i++) {
+  for (uint8_t i = 0; i < AVG_COUNT + 1; i++) {
     delay(TIME_BETWEEN_MEAS);  // TODO: go to sleep between measurements
     duration_us = measure();
-    Serial.print(duration_us);
-    Serial.print(" ");
-    dur_sum = dur_sum + duration_us;
+
+    if (i > 0) {
+      Serial.print(duration_us);
+      Serial.print(" ");
+      dur_sum = dur_sum + duration_us;
+    }
   }
 
   duration_us = dur_sum / AVG_COUNT;
@@ -69,20 +72,22 @@ uint16_t data_colection() {
 
   float c = 331.3 + 0.606 * tempC;
 
-  Serial.print("c=");
+  Serial.print(" c=");
   Serial.print(c, 2);
 
   float distance = (duration_us * c / 10000) / 2;
   Serial.print(" Distance avg: ");
   Serial.println(distance, 1);
 
-  return duration_us;
+  uint16_t dist_coded_cm = (uint16_t)(distance * 10);
+
+  return dist_coded_cm;
 }
 
-void send_packet(uint16_t duration_us) {
+void send_packet(uint16_t data_16b) {
   uint8_t msg[2];
-  msg[0] = duration_us;
-  msg[1] = duration_us >> 8;
+  msg[0] = data_16b;
+  msg[1] = data_16b >> 8;
   rf_driver.send(msg, 2);
   rf_driver.waitPacketSent();
   // rf_driver.mode() == rf_driver.RHModeTx;
@@ -136,6 +141,8 @@ void go_to_sleep() {
   digitalWrite(RF_VCC_pin, HIGH);
   digitalWrite(SONIC_VCC_pin, HIGH);
   digitalWrite(LED_BUILTIN, HIGH);
+
+  Serial.print("\n---WAKE---\n");
 }
 
 void setup_clock_prescaler() {
@@ -200,7 +207,7 @@ void getCurrentTime() {
   bool pmFlag;
   bool century;
 
-  Serial.print("\nCurrent time: 20");
+  Serial.print("Current time: 20");
   Serial.print(rtc.getYear());
   Serial.print(" ");
 
@@ -252,10 +259,10 @@ void setup() {
 
 void loop() {
   static uint8_t meas_count;
-  uint16_t duration_us = data_colection();
-  // send_packet(duration_us);
+  uint16_t data_16b = data_colection();
+  send_packet(data_16b);
 
-  setNextAlarm();  // Schedule next 4-hour alarm
+  setNextAlarm();
 
   go_to_sleep();
 }

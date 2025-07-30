@@ -4,6 +4,7 @@
             "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/**",
+                "${workspaceFolder}/lib/**",
                 "C://Users//Martin//AppData//Local//Arduino15//packages//arduino//**",
                 "C://Users//Martin//AppData//Local//Arduino15//libraries//**",
                 "C:/Users/Martin/Documents/Arduino/libraries/**"
@@ -16,7 +17,8 @@
                 "ARDUINO=10607",
                 "ARDUINO_AVR_MINI",
                 "ARDUINO_ARCH_AVR",
-                "__AVR__"
+                "__AVR__",
+                "RH_ASK_ARDUINO_USE_TIMER2"
             ],
             "windowsSdkVersion": "10.0.19041.0",
             "cStandard": "c17",
