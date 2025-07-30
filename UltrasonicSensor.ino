@@ -19,6 +19,7 @@
 
 #define AVG_COUNT         10   // 10
 #define TIME_BETWEEN_MEAS 500  // 500
+#define RC_OSC_CONST      0.9765
 // #define EEPROM
 
 // uint16_t speed = 2000, uint8_t rxPin = 11, uint8_t txPin = 12, uint8_t pttPin = 10, bool pttInverted = false
@@ -39,8 +40,8 @@ uint16_t measure() {
   digitalWrite(TRIG_PIN, HIGH);
   delayMicroseconds(10);
   digitalWrite(TRIG_PIN, LOW);
-  while (capture_done == 0);     // Wait for echo
-  return echo_duration * 2;  // prescaler 8 means 0.5us resolution
+  while (capture_done == 0);                // Wait for echo
+  return echo_duration / 4 * RC_OSC_CONST;  // prescaler 1 means 1/4us resolution (@ 4MHz)
 }
 
 uint16_t data_colection() {
@@ -48,7 +49,7 @@ uint16_t data_colection() {
   uint32_t dur_sum = 0;
 
   Serial.print("Duration ms sample: ");
-  for (uint8_t i = 0; i < AVG_COUNT; i++) {    
+  for (uint8_t i = 0; i < AVG_COUNT; i++) {
     delay(TIME_BETWEEN_MEAS);  // TODO: go to sleep between measurements
     duration_us = measure();
     Serial.print(duration_us);
@@ -64,12 +65,12 @@ uint16_t data_colection() {
   float tempC = rtc.getTemperature();
 
   Serial.print("T=");
-	Serial.print(tempC, 2);
+  Serial.print(tempC, 2);
 
-  float c = 331.3 + 0.606 * tempC; 
+  float c = 331.3 + 0.606 * tempC;
 
   Serial.print("c=");
-	Serial.print(c, 2);
+  Serial.print(c, 2);
 
   float distance = (duration_us * c / 10000) / 2;
   Serial.print(" Distance avg: ");
@@ -90,7 +91,7 @@ void send_packet(uint16_t duration_us) {
 void init_ultrasonic_icp1() {
   // Configure Timer1
   TCCR1A = 0;                           // set to normal mode
-  TCCR1B = (1 << ICES1) | (1 << CS11);  // Rising edge, prescaler = 8 (1 µs resolution)
+  TCCR1B = (1 << ICES1) | (1 << CS10);  // Rising edge, prescaler = 1 (1/8 µs resolution) (8MHz)
   TIMSK1 |= (1 << ICIE1);               // Enable input capture interrupt
 
   sei();  // Enable global interrupts
@@ -149,9 +150,9 @@ void setup_clock_prescaler() {
 void setNextAlarm() {
   bool h12;
   bool hPM;
-  //uint8_t cMin = rtc.getMinute();
-  // uint8_t next_min = (cMin + 4) / 5 * 5;
-  //uint8_t next_min = cMin + 1;
+  // uint8_t cMin = rtc.getMinute();
+  //  uint8_t next_min = (cMin + 4) / 5 * 5;
+  // uint8_t next_min = cMin + 1;
 
   uint8_t cSec = rtc.getSecond();
   uint8_t next_sec = (cSec + 9) / 10 * 10;
@@ -227,7 +228,6 @@ void setup() {
   pinMode(RF_VCC_pin, OUTPUT);
   pinMode(SONIC_VCC_pin, OUTPUT);
   pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
 
   Serial.begin(9600);
   Serial.println("\n---Rain water level meter---");
@@ -253,27 +253,14 @@ void setup() {
 void loop() {
   static uint8_t meas_count;
   uint16_t duration_us = data_colection();
-  //send_packet(duration_us);
+  // send_packet(duration_us);
 
   setNextAlarm();  // Schedule next 4-hour alarm
-
-  /*EEPROM.put(2 * meas_count, duration_us);
-
-  meas_count++;
-  if (meas_count >= 1) {
-    for (uint8_t i = 0; i < meas_count; i++) {
-      EEPROM.get(2 * i, duration_us);
-      send_packet(duration_us);
-    }
-    meas_count = 0;
-  }*/
 
   go_to_sleep();
 }
 
 ISR(TIMER1_CAPT_vect) {
-  
-
   if (state == 0) {
     // Rising edge detected
     start_time = ICR1;
