@@ -17,9 +17,9 @@
 #define SDA_PIN       18
 #define SCL_PIN       19
 
-#define AVG_COUNT         9    // 10
+#define AVG_COUNT         10   // 10
 #define TIME_BETWEEN_MEAS 500  // 500
-#define RC_OSC_CONST      0.9765
+#define RC_OSC_CONST      0.977
 // #define EEPROM
 
 // uint16_t speed = 2000, uint8_t rxPin = 11, uint8_t txPin = 12, uint8_t pttPin = 10, bool pttInverted = false
@@ -154,15 +154,15 @@ void setup_clock_prescaler() {
   sei();  // Re-enable interrupts
 }
 
-void setNextAlarm() {
+void setNextAlarm() { //every minute
   bool h12;
   bool hPM;
-  // uint8_t cMin = rtc.getMinute();
-  //  uint8_t next_min = (cMin + 4) / 5 * 5;
-  // uint8_t next_min = cMin + 1;
+  //uint8_t cMin = rtc.getMinute();
+  //uint8_t next_min = (cMin + 4) / 5 * 5;
+  //uint8_t next_min = cMin + 1;
 
-  uint8_t cSec = rtc.getSecond();
-  uint8_t next_sec = (cSec + 9) / 10 * 10;
+  //uint8_t cSec = rtc.getSecond();
+  //uint8_t next_sec = (cSec + 9) / 10 * 10;
 
   uint8_t cHour = rtc.getHour(h12, hPM);
   uint8_t cMin = rtc.getMinute();
@@ -171,10 +171,11 @@ void setNextAlarm() {
   rtc.setA1Time(
       rtc.getDate(),  // day
       cHour,
-      /*next_min > 60 ? 60 : next_min,*/
+      //next_min > 59 ? 59 : next_min,
       cMin,
-      next_sec > 59 ? 59 : next_sec,
-      0b00001110,  // Match HH:MM:SS (when sec, min, and hour match)
+      //next_sec > 59 ? 59 : next_sec,
+      00,
+      0b00001110,  
       false, false, false);
 
   // enable Alarm 1 interrupts
@@ -186,9 +187,9 @@ void setNextAlarm() {
   Serial.print("Next alarm set at: ");
   Serial.print(cHour);
   Serial.print(":");
-  Serial.print(cMin);
+  Serial.print(cMin+1);
   Serial.print(":");
-  Serial.print(next_sec);
+  Serial.print(00);
   Serial.println("");
 }
 
